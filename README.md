@@ -1,21 +1,14 @@
-<img align="right" width="150" height="150" top="100" src="./assets/readme.jpg">
+Token addresses:
 
-# femplate • [![ci](https://github.com/abigger87/femplate/actions/workflows/ci.yml/badge.svg)](https://github.com/abigger87/femplate/actions/workflows/ci.yml) ![license](https://img.shields.io/github/license/abigger87/femplate?label=license) ![solidity](https://img.shields.io/badge/solidity-^0.8.15-lightgrey)
+**WETH**: https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+**DAI**: https://etherscan.io/address/0x6b175474e89094c44da98b954eedeac495271d0f
 
-A **Clean**, **Robust** Template for Foundry Projects.
-
-## Getting Started
-
-Click [`use this template`](https://github.com/abigger87/femplate/generate) to create a new repository with this repo as the initial state.
-
-Or, if your repo already exists, run:
-```sh
-forge init --template https://github.com/abigger87/femplate
-git submodule update --init --recursive
-forge install
-```
-
-Run `./utils/rename.sh` to rename all instances of `femplate` with the name of your project/repository.
+Exchange addresses:
+**UniswapV2:** https://etherscan.io/address/0xa478c2975ab1ea89e8196811f51a7b7ade33eb11
+**Sushiswap:** https://etherscan.io/address/0xc3d03e4f041fd4cd388c549ee2a29a9e5075882f
+**Shebaswap:** https://etherscan.io/address/0x8faf958e36c6970497386118030e6297fff8d275
+**Sakeswap:** https://etherscan.io/address/0x2ad95483ac838e2884563ad278e933fba96bc242
+**Croswap:** https://etherscan.io/address/0x60a26d69263ef43e9a68964ba141263f19d71d51
 
 ## Blueprint
 
