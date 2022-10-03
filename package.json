@@ -19,5 +19,14 @@
   "bugs": {
     "url": "https://github.com/chirag-bgh/kira/issues"
   },
-  "homepage": "https://github.com/chirag-bgh/kira#readme"
+  "homepage": "https://github.com/chirag-bgh/kira#readme",
+  "dependencies": {
+    "@flashbots/ethers-provider-bundle": "^0.5.0",
+    "ethers": "^5.7.1",
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.186",
+    "@types/node": "^18.8.0"
+  }
 }
