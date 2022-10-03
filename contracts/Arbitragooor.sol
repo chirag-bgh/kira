@@ -1,106 +1,79 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "./MultiCall.sol";
-import "./Auth.sol";
-import "./interfaces";
-
 interface IERC20 {
+    event Approval(address indexed owner, address indexed spender, uint value);
+    event Transfer(address indexed from, address indexed to, uint value);
+
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
+    function decimals() external view returns (uint8);
+    function totalSupply() external view returns (uint);
     function balanceOf(address owner) external view returns (uint);
+    function allowance(address owner, address spender) external view returns (uint);
+
+    function approve(address spender, uint value) external returns (bool);
     function transfer(address to, uint value) external returns (bool);
+    function transferFrom(address from, address to, uint value) external returns (bool);
 }
 
 interface IWETH is IERC20 {
     function deposit() external payable;
-    function withdraw(uint256) external;
+    function withdraw(uint) external;
 }
 
-contract Arbitragooor is Multicall {
-    address public immutable hub;
-    address public immutable weth;
-    address immutable UNIFACTORY;
-    address immutable SUSHIROUTER;
+// This contract simply calls multiple targets sequentially, ensuring WETH balance before and after
 
-    constructor(
-        address _hub,
-        address _weth,
-        address _owner,
-        address _executor
-    ) Auth(_owner, _executor) {
-        hub = _hub;
-        weth = _weth;
-    }
+contract FlashBotsMultiCall {
+    address private immutable owner;
+    address private immutable executor;
+    IWETH private constant WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
-    receive() external payable {}
-
-    modifier ensureProfitAndPayFee(
-        address tokenIn,
-        uint256 amtNetMin,
-        uint256 txFeeEth
-    ) {
-        uint256 balanceBefore = IERC20(tokenIn).balanceOf(address(this));
+    modifier onlyExecutor() {
+        require(msg.sender == executor);
         _;
-        uint256 balanceAfter = IERC20(tokenIn).balanceOf(address(this));
-        require(balanceAfter >= balanceBefore + amtNetMin, "not profitable");
+    }
 
-        if (txFeeEth > 0) {
-            uint256 ethBalance = address(this).balance;
-            if (ethBalance < txFeeEth) IWETH(weth).withdraw(txFeeEth - ethBalance);
-            block.coinbase.transfer(txFeeEth);
+    modifier onlyOwner() {
+        require(msg.sender == owner);
+        _;
+    }
+
+    constructor(address _executor) payable {
+        owner = msg.sender;
+        executor = _executor;
+        if (msg.value > 0) {
+            WETH.deposit{value: msg.value}();
         }
     }
 
-    function work(
-        address tokenIn,
-        uint256 amtNetMin,
-        uint256 txFeeEth,
-        bytes calldata data
-    ) external payable onlyOwnerOrExecutor ensureProfitAndPayFee(tokenIn, amtNetMin, txFeeEth) {
-        (bool success, bytes memory ret) = hub.call(data);
-        _require(success, ret);
+    receive() external payable {
     }
 
-    function uniswapV2Call(address sender, uint256 amount0, uint256 amount1, bytes calldata data) external {
-        // There are probably cheaper ways but in general not worth wasting security
-        address token0 = SushiPair(msg.sender).token0(); // fetch the address of token0
-        address token1 = SushiPair(msg.sender).token1(); // fetch the address of token1
-
-	// You can calc this without the external call btw, it just involves hashing the factory init code and can be confusing to put in an example
-        require(msg.sender == SushiFactory(UNIFACTORY).getPair(token0, token1)); // ensure that msg.sender is a V2 pair
-        require(sender == address(this));
-
-        (uint256 repay) = abi.decode(data, (uint256));
-
-        // Maybe make this a router call?
-        if (amount0 == 0) {
-            // Trade A into B
-            ERC20(token1).approve(SUSHIROUTER, MAX_UINT);
-
-            address[] memory route = new address[](2);
-
-            route[0] = token1;
-            route[1] = token0;
-
-            uint256[] memory tokensOut =
-                SushiRouter(SUSHIROUTER).swapExactTokensForTokens(amount1, 0, route, address(this), MAX_UINT);
-
-            require(tokensOut[1] - repay > 0); // ensure profit is there
-
-            ERC20(token0).transfer(msg.sender, repay);
-        } else {
-            // Trade B into A
-            ERC20(token0).approve(SUSHIROUTER, MAX_UINT);
-
-            address[] memory route = new address[](2);
-            route[0] = token0;
-            route[1] = token1;
-
-            uint256[] memory tokensOut =
-                SushiRouter(SUSHIROUTER).swapExactTokensForTokens(amount0, 0, route, address(this), MAX_UINT);
-
-            require(tokensOut[1] - repay > 0); // ensure profit is there
-
-            ERC20(token1).transfer(msg.sender, repay);
+    function uniswapWeth(uint256 _wethAmountToFirstMarket, uint256 _ethAmountToCoinbase, address[] memory _targets, bytes[] memory _payloads) external onlyExecutor payable {
+        require (_targets.length == _payloads.length);
+        uint256 _wethBalanceBefore = WETH.balanceOf(address(this));
+        WETH.transfer(_targets[0], _wethAmountToFirstMarket);
+        for (uint256 i = 0; i < _targets.length; i++) {
+            (bool _success, bytes memory _response) = _targets[i].call(_payloads[i]);
+            require(_success); _response;
         }
+
+        uint256 _wethBalanceAfter = WETH.balanceOf(address(this));
+        require(_wethBalanceAfter > _wethBalanceBefore + _ethAmountToCoinbase);
+        if (_ethAmountToCoinbase == 0) return;
+
+        uint256 _ethBalance = address(this).balance;
+        if (_ethBalance < _ethAmountToCoinbase) {
+            WETH.withdraw(_ethAmountToCoinbase - _ethBalance);
+        }
+        block.coinbase.transfer(_ethAmountToCoinbase);
+    }
+
+    function call(address payable _to, uint256 _value, bytes calldata _data) external onlyOwner payable returns (bytes memory) {
+        require(_to != address(0));
+        (bool _success, bytes memory _result) = _to.call{value: _value}(_data);
+        require(_success);
+        return _result;
     }
 }
